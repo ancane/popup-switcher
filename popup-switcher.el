@@ -115,7 +115,7 @@ WINDOW-CENTER - if t, overrides `psw-in-window-center' var value."
                                                 :scroll-bar t
                                                 :margin-left 1
                                                 :margin-right 1
-                                                :around nil
+                                                :around t
                                                 :isearch t
                                                 :fallback fallback)))
             target-item-name))
