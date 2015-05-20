@@ -107,7 +107,7 @@ WINDOW-CENTER - if t, overrides `psw-in-window-center' var value."
         (progn
           (psw-copy-face 'popup-isearch-match 'flx-highlight-face)
           (let* ((menu-pos (save-excursion
-                             (artist-move-to-xy x y)
+                             (artist-move-to-xy (if (> x 3) x 3) y)
                              (point)))
                  (target-item-name (popup-menu* item-names-list
                                                 :point menu-pos
