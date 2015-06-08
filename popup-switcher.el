@@ -6,7 +6,7 @@
 ;; URL: https://github.com/kostafey/popup-switcher
 ;; Keywords: popup, switch, buffers, functions
 ;; Version: 0.2.10
-;; Package-Requires: ((cl-lib "0.3")(popup "0.5.2"))
+;; Package-Requires: ((cl-lib "0.3")(popup "0.5.3"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -117,6 +117,9 @@ WINDOW-CENTER - if t, overrides `psw-in-window-center' var value."
                                                 :margin-right 1
                                                 :around t
                                                 :isearch t
+                                                :isearch-filter (if psw-use-flx
+                                                                    'flx-ido-match-internal
+                                                                  'popup-isearch-filter-list)
                                                 :fallback fallback)))
             target-item-name))
       (progn
@@ -126,22 +129,6 @@ WINDOW-CENTER - if t, overrides `psw-in-window-center' var value."
           (goto-char old-pos)
           (set-buffer-modified-p modified))
         (psw-copy-face 'psw-temp-face 'flx-highlight-face)))))
-
-(defadvice popup-isearch-filter-list (around
-                                      psw-popup-isearch-filter-list
-                                      activate)
-  "Choose between the regular popup-isearch-filter-list and flx-ido-match-internal"
-  (if (and psw-use-flx
-           (> (length pattern) 0))
-      (if (not (require 'flx nil t))
-          (progn
-            ad-do-it
-            (message "Please install flx.el and flx-ido.el if you use fuzzy completion"))
-        (if (eq :too-big
-                (catch :too-big
-                  (setq ad-return-value (flx-ido-match-internal pattern list))))
-            ad-do-it))
-    ad-do-it))
 
 (defun psw-nil? (x) (equal nil x))
 
