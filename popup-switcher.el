@@ -149,7 +149,7 @@ POSITION - if set, overrides `psw-popup-position' var value."
                                                 :margin-right 1
                                                 :around t
                                                 :isearch t
-                                                :isearch-filter (psw-filter)
+                                                :isearch-filter (flx-popup-filter)
                                                 :fallback fallback)))
             target-item-name))
       (progn
@@ -164,17 +164,18 @@ POSITION - if set, overrides `psw-popup-position' var value."
 ;;; flx-popup
 
 
-(defun psw-filter ()
+(defun flx-popup-filter ()
   "Function that return either flx or a regular filtering function."
   (if popup-imenu-fuzzy-match
-      'psw-flx-match
+      'flx-popup-match
     'popup-isearch-filter-list))
 
-(defun psw-flx-match (query items)
+
+(defun flx-popup-match (query items)
   "Flx filtering function.
 QUERY - search string
 ITEMS - popup menu items list"
-  (let ((flex-result (psw-flx-flex-match query items)))
+  (let ((flex-result (flx-popup-flex-match query items)))
     (let* ((matches (cl-loop for item in flex-result
                              for string = (if (consp item) (car item) item)
                              for score = (flx-score string query flx-file-cache)
@@ -182,21 +183,21 @@ ITEMS - popup menu items list"
                              collect (cons item score)
                              into matches
                              finally return matches)))
-      (psw-flx-decorate
+      (flx-popup-decorate
        (sort matches (lambda (x y) (> (cadr x) (cadr y))))
        ))))
 
-(defun psw-flx-flex-match (query items)
+(defun flx-popup-flex-match (query items)
   "Implement flex matching. Keep duplicates."
   (if (zerop (length query))
       items
     (let* ((case-fold-search nil) ;; case sensitive
-           (re (psw-query-to-regexp query)))
+           (re (flx-popup-query-to-regexp query)))
       (-filter
        (lambda (item) (string-match re item))
        items))))
 
-(defun psw-query-to-regexp (query)
+(defun flx-popup-query-to-regexp (query)
   "Convert QUERY to flx style case folding regexp."
   (let* ((breakdown-str (mapcar
                          (lambda (c)
@@ -209,7 +210,7 @@ ITEMS - popup menu items list"
                       (cdr breakdown-str) ""))))
     re))
 
-(defun psw-flx-decorate (things)
+(defun flx-popup-decorate (things)
   "Highlight imenu items matching search string.
 THINGS - popup menu items list"
   (if psw-use-faces
@@ -218,17 +219,33 @@ THINGS - popup menu items list"
         (nconc
          (cl-loop for thing in things
                   for i from 0 below decorate-count
-                  collect (psw-propertize thing))
+                  collect (flx-popup-propertize thing))
          (mapcar 'car (nthcdr decorate-count things))))
     (mapcar 'car things)))
 
-(defun psw-propertize (thing)
-  "Add value property to imenu item to be returned in case of thing selection.
-THING - imenu item."
-  (let* ((item-value (popup-item-value (car thing)))
-         (flx-propertized (flx-propertize (car thing) (cdr thing))))
-    (popup-item-propertize flx-propertized 'value item-value)))
-
+(defun flx-popup-propertize (thing)
+  "Apply text properties according to score. 
+Preserve existing item properties.
+THING - (object . score)."
+  (let* ((item (car thing))
+	 (item-value (popup-item-value item))
+	 (item-face (popup-item-face item))
+	 (item-mouse-face (popup-item-mouse-face item))
+	 (item-selection-face (popup-item-selection-face item))
+	 (item-sublist (popup-item-sublist item))
+	 (item-document (popup-item-document item))
+	 (item-symbol (popup-item-symbol item))
+	 (item-summary (popup-item-summary item))
+         (flx-propertized (flx-propertize item (cdr thing))))
+    (popup-make-item flx-propertized
+		     :value item-value
+		     :face item-face
+		     :mouse-face item-mouse-face
+		     :selection-face item-selection-face
+		     :sublist item-sublist
+		     :document item-document
+		     :symbol item-symbol
+		     :summary item-summary)))
 
 ;;; flx-popup ends here
 
