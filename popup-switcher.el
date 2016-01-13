@@ -70,6 +70,11 @@ fill-column - centered relative to `fill-column'"
   :type 'hook
   :group 'popup-switcher)
 
+(defcustom psw-use-faces t
+  "Use `flx-highlight-face' to indicate characters contributing to best flx score."
+  :group 'popup-switcher
+  :type 'boolean)
+
 (defun psw-window-line-number ()
   (save-excursion
     (goto-char (window-start))
@@ -84,7 +89,7 @@ fill-column - centered relative to `fill-column'"
 
 (defun psw-copy-face (old-face new-face)
   "Safe copy face to handle absence of `flx-highlight-face' if
-`flx-ido' is not installed."
+`flx' is not installed."
   (when psw-use-flx
     (if (facep old-face)
         (copy-face old-face new-face)
@@ -144,6 +149,7 @@ POSITION - if set, overrides `psw-popup-position' var value."
                                                 :margin-right 1
                                                 :around t
                                                 :isearch t
+                                                :isearch-filter (psw-filter)
                                                 :fallback fallback)))
             target-item-name))
       (progn
@@ -154,21 +160,78 @@ POSITION - if set, overrides `psw-popup-position' var value."
           (set-buffer-modified-p modified))
         (psw-copy-face 'psw-temp-face 'flx-highlight-face)))))
 
-(defadvice popup-isearch-filter-list (around
-                                      psw-popup-isearch-filter-list
-                                      activate)
-  "Choose between the regular popup-isearch-filter-list and flx-ido-match-internal"
-  (if (and psw-use-flx
-           (> (length pattern) 0))
-      (if (not (require 'flx nil t))
-          (progn
-            ad-do-it
-            (message "Please install flx.el and flx-ido.el if you use fuzzy completion"))
-        (if (eq :too-big
-                (catch :too-big
-                  (setq ad-return-value (flx-ido-match-internal pattern list))))
-            ad-do-it))
-    ad-do-it))
+
+;;; flx-popup
+
+
+(defun psw-filter ()
+  "Function that return either flx or a regular filtering function."
+  (if popup-imenu-fuzzy-match
+      'psw-flx-match
+    'popup-isearch-filter-list))
+
+(defun psw-flx-match (query items)
+  "Flx filtering function.
+QUERY - search string
+ITEMS - popup menu items list"
+  (let ((flex-result (psw-flx-flex-match query items)))
+    (let* ((matches (cl-loop for item in flex-result
+                             for string = (if (consp item) (car item) item)
+                             for score = (flx-score string query flx-file-cache)
+                             if score
+                             collect (cons item score)
+                             into matches
+                             finally return matches)))
+      (psw-flx-decorate
+       (sort matches (lambda (x y) (> (cadr x) (cadr y))))
+       ))))
+
+(defun psw-flx-flex-match (query items)
+  "Implement flex matching. Keep duplicates."
+  (if (zerop (length query))
+      items
+    (let* ((case-fold-search nil) ;; case sensitive
+           (re (psw-query-to-regexp query)))
+      (-filter
+       (lambda (item) (string-match re item))
+       items))))
+
+(defun psw-query-to-regexp (query)
+  "Convert QUERY to flx style case folding regexp."
+  (let* ((breakdown-str (mapcar
+                         (lambda (c)
+                           (apply 'string c (when (= (downcase c) c)
+                                              (list (upcase c)))))
+                         query))
+         (re (concat (format "[%s]" (nth 0 breakdown-str))
+                     (mapconcat
+                      (lambda (c) (format "[^%s]*[%s]" c c))
+                      (cdr breakdown-str) ""))))
+    re))
+
+(defun psw-flx-decorate (things)
+  "Highlight imenu items matching search string.
+THINGS - popup menu items list"
+  (if psw-use-faces
+      (let ((decorate-count (min ido-max-prospects
+                                 (length things))))
+        (nconc
+         (cl-loop for thing in things
+                  for i from 0 below decorate-count
+                  collect (psw-propertize thing))
+         (mapcar 'car (nthcdr decorate-count things))))
+    (mapcar 'car things)))
+
+(defun psw-propertize (thing)
+  "Add value property to imenu item to be returned in case of thing selection.
+THING - imenu item."
+  (let* ((item-value (popup-item-value (car thing)))
+         (flx-propertized (flx-propertize (car thing) (cdr thing))))
+    (popup-item-propertize flx-propertized 'value item-value)))
+
+
+;;; flx-popup ends here
+
 
 (defun psw-nil? (x) (equal nil x))
 
